@@ -131,9 +131,10 @@ def get_cats(ndxs, ddir=ddir):
 
 
 if __name__=="__main__":
-    N_samples = 10
-    load_ndxs = rng.integers(0, 10240, N_samples)
+    # N_samples = 10
+    # load_ndxs = rng.integers(0, 10240, N_samples)
 
+    load_ndxs = np.arange(10)
     full_cat = get_cats(load_ndxs)
     photom, redshifts = get_mlcat(full_cat, verbose=True)
     

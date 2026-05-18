@@ -140,7 +140,7 @@ if __name__=="__main__":
     # load_ndxs = rng.integers(0, 10240, N_samples)
     som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = load_model(suffix)
 
-    for i in range(10):
+    for i in range(20, 30):
         load_ndxs = [i]
         full_cat = get_cats(load_ndxs)
         photom = get_photom(full_cat, verbose=True)
