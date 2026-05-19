@@ -79,7 +79,8 @@ def create_blends(cat, Nblends=1000, rand_weight=False, verbose=False):
     nfound = 0
     while nfound < Nblends:
         if verbose:
-            if nfound % 100 == 0:
+            step_size = Nblends//10
+            if nfound % step_size == 0:
                 print(f"Generated {nfound} blends")
 
         gal_ndxs = rng.integers(0, high=Ngal, size=2)
@@ -125,7 +126,7 @@ def create_matrix(blends, input1, input2, som):
     blend_normalization = np.einsum('ijk->k', blend_counts_matrix)
 
     cell_weights = np.zeros((som_size, som_size))
-    # Might need to figure out the double counting or if it gets normalized out...
+    # cell_weights[k,i] = (2 * Number of Times cell i mapped to k)/(2 * Number of mappings to k)
     for i in range(som_size):
         if blend_normalization[i] == 0:
             cell_weights[i,i] = 1
@@ -144,13 +145,15 @@ if __name__=="__main__":
     full_cat = get_cats(load_ndxs)
     pure_cat = full_cat[full_cat['blend_diff'] <= 0]
 
-    blend_samples, blend_inputs = create_blends(pure_cat, Nblends=10000, verbose=True)
+    blend_samples, blend_inputs = create_blends(pure_cat, Nblends=100000, verbose=True)
+    print("Created Sample")
 
     blend_ml = flux_to_mlcat(blend_samples)
     blend_input1 = flux_to_mlcat(blend_inputs[:,0,:])
     blend_input2 = flux_to_mlcat(blend_inputs[:,1,:])
 
     blend_counts_matrix, cell_weights = create_matrix(blend_ml, blend_input1, blend_input2, som)
+    print("Created blend matrix")
 
     np.save(f'{out_dir}/blend_counts_matrix{suffix}.npy', blend_counts_matrix)
     np.save(f'{out_dir}/cell_weights{suffix}.npy', cell_weights)
