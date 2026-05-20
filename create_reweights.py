@@ -12,6 +12,7 @@ out_dir = f'{ddir}/output/reweight'
 model_dir = f'{ddir}/output/models'
 suffix = ''
 i_zp = 30
+som_neuron = 32
 
 def flux_to_mlcat(cat, verbose=False):
 

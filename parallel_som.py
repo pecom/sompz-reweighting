@@ -4,8 +4,12 @@ from astropy.io import fits
 from minisom import MiniSom
 import astropy.units as u
 from numpy.lib.recfunctions import structured_to_unstructured
+from mpi4py import MPI
 import os, sys, gc, pickle
 
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
+size = comm.Get_size()
 
 rng = np.random.default_rng()
 ddir = '/gpfs/projects/VonDerLindenGroup/padari/som-pz'
@@ -13,6 +17,7 @@ model_dir = f'{ddir}/output/models'
 suffix = ''
 tomographic_bins = np.array([0, 0.4, 0.6, 0.9, 2.0])
 N_pdf_bins = 101
+som_neuron = 32
 
 def get_photom(cat, verbose=False):
     if verbose:
@@ -121,7 +126,7 @@ def add_file(add, fname):
     tmp += add
     np.save(fname, tmp)
 
-def update_files(cat_counts, base_pdfs, weight_pdfs, true_cat_counts, true_pdfs):
+def update_files(cat_counts, base_pdfs, weight_pdfs, true_cat_counts, true_pdfs, suffix=suffix):
     add_file(cat_counts, f'./output/counts{suffix}.npy')
     add_file(base_pdfs, f'./output/base_pdfs{suffix}.npy')
     add_file(weight_pdfs, f'./output/weight_pdfs{suffix}.npy')
@@ -132,10 +137,37 @@ def update_files(cat_counts, base_pdfs, weight_pdfs, true_cat_counts, true_pdfs)
     
 
 if __name__=="__main__":
-    som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = load_model(suffix)
 
-    cell_weights = np.load(f'./output/reweight/cell_weights.npy')
-    blend_weights = np.load(f'./output/models/blend_weights.npy')
+
+    som_full_size = som_neuron * som_neuron
+
+    if rank == 0:
+        # full_ndxs = np.arange(10, 10240)
+        full_ndxs = np.arange(210, 310)
+        load_ndxs = np.array_split(full_ndxs, size)
+        som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = load_model(suffix)
+
+        cell_weights = np.load(f'./output/reweight/cell_weights.npy')
+        blend_weights = np.load(f'./output/models/blend_weights.npy')
+    else:
+        load_ndxs = None
+        som = None
+        tomographic_cell_ndxs = None
+        tomographic_ndxs = None
+        flat_trained_pz_pdfs = np.empty((som_full_size, N_pdf_bins-1), dtype='float64')
+        cell_weights = np.empty((som_full_size,som_full_size), dtype='float64')
+        blend_weights = np.empty(som_full_size, dtype='float64')
+
+    load_ndxs = comm.scatter(load_ndxs, root=0)
+    som = comm.bcast(som, root=0)
+    tomographic_cell_ndxs = comm.bcast(tomographic_cell_ndxs, root=0)
+    tomographic_ndxs = comm.bcast(tomographic_ndxs, root=0)
+    comm.Bcast(cell_weights, root=0)
+    comm.Bcast(flat_trained_pz_pdfs, root=0)
+    comm.Bcast(blend_weights, root=0)
+
+
+    print(rank, size, load_ndxs)
 
     real_counts = np.zeros(4)
     true_counts = np.zeros(4)
@@ -143,23 +175,49 @@ if __name__=="__main__":
     weight_pdfs = np.zeros((4, N_pdf_bins - 1))
     true_pdfs = np.zeros((4, N_pdf_bins - 1))
 
-    for i in range(10, 30):
-        load_ndxs = [i]
-        full_cat = get_cats(load_ndxs)
+    comm.Barrier()
+
+    for i in load_ndxs:
+        single_ndx = [i]
+        full_cat = get_cats(single_ndx)
         photom = get_photom(full_cat, verbose=False)
 
         cat_counts, bpdfs, wpdfs, true_cat_counts, tpdfs = label_cells(photom, som, tomographic_cell_ndxs,
-                                                                                     flat_trained_pz_pdfs, full_cat,
-                                                                                     blend_weights, cell_weights)
-
+                                                                       flat_trained_pz_pdfs, full_cat,
+                                                                       blend_weights, cell_weights)
         real_counts += cat_counts
         true_counts += true_cat_counts
 
         base_pdfs += bpdfs
         weight_pdfs += wpdfs
         true_pdfs += tpdfs
-        print(f"Finished with ndx {i}")
 
-    update_files(real_counts, base_pdfs, weight_pdfs, true_counts, true_pdfs)
+        print(f"Finished with ndx {i} on {rank}")
 
+
+    recv_counts = None
+    recv_tcounts = None
+    recv_bpdfs = None
+    recv_wpdfs = None
+    recv_tpdfs = None
+
+    if rank == 0:
+        recv_counts = np.empty([size, 4], dtype='float64')
+        recv_tcounts = np.empty([size, 4], dtype='float64')
+        recv_bpdfs = np.empty([size, 4, N_pdf_bins - 1], dtype='float64')
+        recv_wpdfs = np.empty([size, 4, N_pdf_bins - 1], dtype='float64')
+        recv_tpdfs = np.empty([size, 4, N_pdf_bins - 1], dtype='float64')
+
+    comm.Gather(real_counts, recv_counts, root=0)
+    comm.Gather(true_counts, recv_tcounts, root=0)
+    comm.Gather(base_pdfs, recv_bpdfs, root=0)
+    comm.Gather(weight_pdfs, recv_wpdfs, root=0)
+    comm.Gather(true_pdfs, recv_tpdfs, root=0)
+    
+
+    if rank==0:
+        update_files(np.sum(recv_counts, axis=0), np.sum(recv_bpdfs, axis=0),
+                    np.sum(recv_wpdfs, axis=0), np.sum(recv_tcounts, axis=0),
+                    np.sum(recv_tpdfs, axis=0))
+        # update_files(cat_counts, base_pdfs, weight_pdfs, true_cat_counts, true_pdfs)
 

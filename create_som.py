@@ -13,6 +13,7 @@ out_dir = f'{ddir}/output/models'
 suffix = ''
 tomographic_bins = np.array([0, 0.4, 0.6, 0.9, 2.0])
 N_pdf_bins = 101
+som_neurons = 32
 
 def get_mlcat(pure_cat, verbose=False):
 
@@ -165,7 +166,7 @@ if __name__=="__main__":
 
     photom, redshifts, _ = get_mlcat(full_cat[pure_filt], verbose=True)
     
-    som = create_som(photom, 20, 5000)
+    som = create_som(photom, som_neurons, 5000)
     print("Created SOM.")
     tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = label_cell_pdfs(som, photom, redshifts, N_pdf_bins)
     print("Assigned PZ PDFs.")
