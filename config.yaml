@@ -1,12 +1,15 @@
-
-suffix: ''
+suffix: 'flagship'
 
 N_pdf_bins: 101
 
-som_neurons: 20
+som_neurons: 32
 
-tomographic_bins: [0, 0.4, 0.6, 0.9, 2.0]
+tomographic_bins: [0, 0.5, 0.8, 1.0, 2.0]
 
-i_zp: 30
+i_zp: -48.6
 
-bands: 'grizy'
+bands: 'ugrizy'
+
+source: 'flagship'
+
+redshift: 'lower_z'

@@ -21,6 +21,8 @@ tomographic_bins = np.array(config['tomographic_bins'])
 som_neurons = config['som_neurons']
 N_pdf_bins = config['N_pdf_bins']
 i_zp = config['i_zp']
+source = config['source']
+bands = config['bands']
 
 def flux_to_mlcat(cat, verbose=False, bands='grizy'):
 
@@ -28,12 +30,12 @@ def flux_to_mlcat(cat, verbose=False, bands='grizy'):
     nan_filt = np.ones(len(cat)).astype(bool)
     i_ndx = 0
     for i,b in enumerate(bands[:-1]):
-        col = -2.5 * np.log10(cat[:,i]/cat[:,1])
+        col = -2.5 * np.log10(cat[:,i]/cat[:,i+1])
         colors.append(col)
         if b=='i':
-            i_ndx = 0
+            i_ndx = i
 
-    i_mag = 30 - 2.5*np.log10(cat[:,i_ndx])
+    i_mag = i_zp - 2.5*np.log10(cat[:,i_ndx])
     colors.append(i_mag)
     photom = np.array(colors)
     photom = (photom[:,nan_filt]).T
@@ -51,13 +53,17 @@ def ndx2cell(n, N):
     n2 = n%N
     return n1, n2
 
-def get_cats(ndxs, ddir=ddir):
-    full_cats = []
-    for ndx in ndxs:
-        matched_cat = Table.read(f'{ddir}/labels/matched_{ndx}.fits')
-        full_cats.append(matched_cat)
+def get_cats(ndxs, ddir=ddir, source='anacal'):
+    match source:
+        case 'anacal':
+            full_cats = []
+            for ndx in ndxs:
+                matched_cat = Table.read(f'{ddir}/labels/matched_{ndx}.fits')
+                full_cats.append(matched_cat)
 
-    full_cat = vstack(full_cats)
+            full_cat = vstack(full_cats)
+        case 'flagship':
+            full_cat = Table.read(f'{ddir}/data/flagship_test2.fits')
     return full_cat
 
 def load_model(suffix, model_dir=model_dir):
@@ -77,7 +83,7 @@ def load_model(suffix, model_dir=model_dir):
 def create_blends(cat, Nblends=1000, bands='grizy',
                   rand_weight=False, verbose=False,
                   flux_format='{band}_flux_gauss2', mag_format='{band}_mag'):
-    fluxes = np.vstack([cat[mag_format.format(band=b)].data for b in bands]).T
+    fluxes = np.vstack([cat[flux_format.format(band=b)].data for b in bands]).T
     neg_flux_filt = ~(np.sum(fluxes < 0, axis=1).astype(bool))
     # zero-point = 30
     i_mag = cat[mag_format.format(band='i')].data[neg_flux_filt]
@@ -153,15 +159,29 @@ if __name__=="__main__":
     som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = load_model(suffix)
 
     load_ndxs = np.arange(10)
-    full_cat = get_cats(load_ndxs)
+    full_cat = get_cats(load_ndxs, source=source)
+    print(source, full_cat.colnames)
+
+    match source:
+        case 'anacal':
+            flux_format='{band}_flux_gauss2'
+            mag_format='{band}_mag'
+        case 'flagship':
+            flux_format='lsst_{band}'
+            mag_format='lsst_mag_{band}'
+    
     pure_cat = full_cat[full_cat['blend_diff'] <= 0]
 
-    blend_samples, blend_inputs = create_blends(pure_cat, Nblends=10000, verbose=True)
+    blend_samples, blend_inputs = create_blends(pure_cat, Nblends=100000, bands=bands,
+                                                verbose=True, flux_format=flux_format, mag_format=mag_format)
+
     print("Created Sample")
 
-    blend_ml = flux_to_mlcat(blend_samples)
-    blend_input1 = flux_to_mlcat(blend_inputs[:,0,:])
-    blend_input2 = flux_to_mlcat(blend_inputs[:,1,:])
+    blend_ml = flux_to_mlcat(blend_samples, bands=bands)
+    blend_input1 = flux_to_mlcat(blend_inputs[:,0,:], bands=bands)
+    blend_input2 = flux_to_mlcat(blend_inputs[:,1,:], bands=bands)
+
+    print("Sample blends:", blend_ml[:3])
 
     blend_counts_matrix, cell_weights = create_matrix(blend_ml, blend_input1, blend_input2, som)
     print("Created blend matrix")

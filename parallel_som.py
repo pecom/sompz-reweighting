@@ -24,6 +24,7 @@ tomographic_bins = np.array(config['tomographic_bins'])
 som_neurons = config['som_neurons']
 N_pdf_bins = config['N_pdf_bins']
 bands = config['bands']
+source = config['source']
 
 def get_photom(cat, band_str='{band}_mag', bands='grizy', verbose=False):
     if verbose:
@@ -67,13 +68,17 @@ def load_model(suffix, model_dir=model_dir):
 
     return som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs
 
-def get_cats(ndxs, ddir=ddir):
-    full_cats = []
-    for ndx in ndxs:
-        matched_cat = Table.read(f'{ddir}/labels/matched_{ndx}.fits')
-        full_cats.append(matched_cat)
+def get_cats(ndxs, ddir=ddir, source='anacal'):
+    match source:
+        case 'anacal':
+            full_cats = []
+            for ndx in ndxs:
+                matched_cat = Table.read(f'{ddir}/labels/matched_{ndx}.fits')
+                full_cats.append(matched_cat)
 
-    full_cat = vstack(full_cats)
+            full_cat = vstack(full_cats)
+        case 'flagship':
+            full_cat = Table.read(f'{ddir}/data/flagship_test.fits')
     return full_cat
 
 def label_cells(photom, som, tomo_cell_ndxs,
@@ -176,6 +181,13 @@ if __name__=="__main__":
     comm.Bcast(flat_trained_pz_pdfs, root=0)
     comm.Bcast(blend_weights, root=0)
 
+    match source:
+        case 'anacal':
+            flux_format='{band}_flux_gauss2'
+            mag_format='{band}_mag'
+        case 'flagship':
+            flux_format='lsst_{band}'
+            mag_format='lsst_mag_{band}'
 
     print(rank, size, load_ndxs)
 
@@ -190,7 +202,7 @@ if __name__=="__main__":
     for i in load_ndxs:
         single_ndx = [i]
         full_cat = get_cats(single_ndx)
-        photom = get_photom(full_cat, verbose=False)
+        photom = get_photom(full_cat, verbose=False, band_str=mag_format, bands=bands)
 
         cat_counts, bpdfs, wpdfs, true_cat_counts, tpdfs = label_cells(photom, som, tomographic_cell_ndxs,
                                                                        flat_trained_pz_pdfs, full_cat,
