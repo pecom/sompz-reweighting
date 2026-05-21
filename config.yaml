@@ -1,0 +1,12 @@
+
+suffix: ''
+
+N_pdf_bins: 101
+
+som_neurons: 20
+
+tomographic_bins: [0, 0.4, 0.6, 0.9, 2.0]
+
+i_zp: 30
+
+bands: 'grizy'

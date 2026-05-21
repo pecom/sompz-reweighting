@@ -1,8 +1,13 @@
 import numpy as np
+import yaml
 
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
 
-N_pdf_bins = 101
-suffix = ''
+suffix = config['suffix']
+print(f"Using {suffix=:}")
+N_pdf_bins = config['N_pdf_bins']
+
 
 zero_counts = np.zeros(4)
 zero_bin = np.zeros((4, N_pdf_bins-1))

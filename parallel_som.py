@@ -5,7 +5,7 @@ from minisom import MiniSom
 import astropy.units as u
 from numpy.lib.recfunctions import structured_to_unstructured
 from mpi4py import MPI
-import os, sys, gc, pickle
+import os, sys, gc, pickle, yaml
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -14,26 +14,35 @@ size = comm.Get_size()
 rng = np.random.default_rng()
 ddir = '/gpfs/projects/VonDerLindenGroup/padari/som-pz'
 model_dir = f'{ddir}/output/models'
-suffix = ''
-tomographic_bins = np.array([0, 0.4, 0.6, 0.9, 2.0])
-N_pdf_bins = 101
-som_neuron = 32
 
-def get_photom(cat, verbose=False):
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+suffix = config['suffix']
+print(f"Using {suffix=:}")
+tomographic_bins = np.array(config['tomographic_bins'])
+som_neurons = config['som_neurons']
+N_pdf_bins = config['N_pdf_bins']
+bands = config['bands']
+
+def get_photom(cat, band_str='{band}_mag', bands='grizy', verbose=False):
     if verbose:
         pure_filt = cat['blend_diff'] <= 0
         blend_frac = np.sum(~pure_filt)/len(pure_filt)
         print(f"Blend fraction: {blend_frac:0.3f}")
 
-    color1 = (cat['g_mag'] - cat['r_mag']).data
-    color2 = (cat['r_mag'] - cat['i_mag']).data
-    color3 = (cat['i_mag'] - cat['z_mag']).data
-    color4 = (cat['z_mag'] - cat['y_mag']).data
-    i_mag = cat['i_mag'].data
+    photom = []
+    nan_filt = np.ones(len(cat)).astype(bool)
+    for i,b in enumerate(bands[:-1]):
+        nb = bands[i+1]
+        color = cat[band_str.format(band=b)] - cat[band_str.format(band=nb)]
+        nan_filt &= ~np.isnan(color)
+        photom.append(color.data)
+        
+    photom.append(cat[band_str.format(band='i')].data)
 
-    photom = np.vstack((color1, color2, color3,
-                        color4, i_mag)).T
-    
+    photom = np.array(photom).T
+
     return photom
 
 def cell2ndx(n1, n2, N):
@@ -139,11 +148,12 @@ def update_files(cat_counts, base_pdfs, weight_pdfs, true_cat_counts, true_pdfs,
 if __name__=="__main__":
 
 
-    som_full_size = som_neuron * som_neuron
+    som_full_size = som_neurons * som_neurons
 
     if rank == 0:
         # full_ndxs = np.arange(10, 10240)
-        full_ndxs = np.arange(210, 310)
+        # full_ndxs = np.arange(210, 310)
+        full_ndxs = np.arange(10, 30)
         load_ndxs = np.array_split(full_ndxs, size)
         som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = load_model(suffix)
 

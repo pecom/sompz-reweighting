@@ -1,7 +1,12 @@
 import numpy as np
+import yaml
 
-N_pdf_bins = 101
-suffix = ''
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
+
+suffix = config['suffix']
+print(f"Using {suffix=:}")
+N_pdf_bins = config['N_pdf_bins']
 
 
 counts = np.load(f'./output/counts{suffix}.npy')

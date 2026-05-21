@@ -4,39 +4,44 @@ from astropy.io import fits
 from minisom import MiniSom
 import astropy.units as u
 from numpy.lib.recfunctions import structured_to_unstructured
-import os, sys, gc, pickle
+import os, sys, gc, pickle, yaml
 
 
 rng = np.random.default_rng()
 ddir = '/gpfs/projects/VonDerLindenGroup/padari/som-pz'
 out_dir = f'{ddir}/output/models'
-suffix = ''
-tomographic_bins = np.array([0, 0.4, 0.6, 0.9, 2.0])
-N_pdf_bins = 101
-som_neurons = 32
 
-def get_mlcat(pure_cat, verbose=False):
+with open('config.yaml', 'r') as f:
+    config = yaml.safe_load(f)
 
-    color1 = (pure_cat['g_mag'] - pure_cat['r_mag']).data
-    color2 = (pure_cat['r_mag'] - pure_cat['i_mag']).data
-    color3 = (pure_cat['i_mag'] - pure_cat['z_mag']).data
-    color4 = (pure_cat['z_mag'] - pure_cat['y_mag']).data
-    i_mag = pure_cat['i_mag'].data
+suffix = config['suffix']
+print(f"Using {suffix=:}")
+tomographic_bins = np.array(config['tomographic_bins'])
+som_neurons = config['som_neurons']
+N_pdf_bins = config['N_pdf_bins']
+bands = config['bands']
 
-    zlabel = pure_cat['redshift'].data
+def get_mlcat(pure_cat, band_str="{band}_mag", redshift_col='redshift', bands='grizy', verbose=False):
+    ml_cat = []
+    nan_filt = np.ones(len(pure_cat)).astype(bool)
+    for i,b in enumerate(bands[:-1]):
+        nb = bands[i+1]
+        color = pure_cat[band_str.format(band=b)] - pure_cat[band_str.format(band=nb)]
+        nan_filt &= ~np.isnan(color)
+        ml_cat.append(color.data)
+        
+    ml_cat.append(pure_cat[band_str.format(band='i')].data)
+    ml_cat.append(pure_cat[redshift_col].data)
 
-    nan_filt = ~np.logical_or.reduce((np.isnan(color1),
-                                      np.isnan(color2),
-                                      np.isnan(color3),
-                                      np.isnan(color4)))
     if verbose:
         print(f"Creating catalog with {np.sum(nan_filt)} entries")
 
-    ml_cat = np.vstack((color1[nan_filt], color2[nan_filt], color3[nan_filt],
-                        color4[nan_filt], i_mag[nan_filt], zlabel[nan_filt])).T
-    Nfeats = 5
-    photom = ml_cat[:,:Nfeats].data
-    labels = ml_cat[:,5].data
+    ml_cat = np.array(ml_cat)
+    ml_cat = (ml_cat[:,nan_filt]).T
+
+    Nfeats = ml_cat.shape[1] - 1
+    photom = ml_cat[:,:Nfeats]
+    labels = ml_cat[:,Nfeats]
     
     return photom, labels, nan_filt
 
@@ -136,7 +141,7 @@ def blend_som(som, full_cat):
     
     blend_numer = np.zeros(som_size)
 
-    full_photom, _, nan_filt = get_mlcat(full_cat, verbose=False)
+    full_photom, _, nan_filt = get_mlcat(full_cat, bands=bands, verbose=False)
 
     full_map = np.array([som.winner(fp) for fp in full_photom])
     full_map_ndxs = cell2ndx(full_map[:,0], full_map[:,1], N_neuron)
@@ -164,7 +169,7 @@ if __name__=="__main__":
     blend_frac = np.sum(~pure_filt)/len(pure_filt)
     print(f"Blend fraction: {blend_frac:0.3f}")
 
-    photom, redshifts, _ = get_mlcat(full_cat[pure_filt], verbose=True)
+    photom, redshifts, _ = get_mlcat(full_cat[pure_filt], bands=bands, verbose=True)
     
     som = create_som(photom, som_neurons, 5000)
     print("Created SOM.")
