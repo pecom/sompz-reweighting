@@ -8,13 +8,6 @@ suffix = config['suffix']
 print(f"Using {suffix=:}")
 N_pdf_bins = config['N_pdf_bins']
 
-
-counts = np.load(f'./output/counts{suffix}.npy')
-tcounts = np.load(f'./output/true_counts{suffix}.npy')
-
-print(counts)
-print(tcounts)
-
 true = np.load(f'./output/true_pdfs{suffix}.npy')
 base = np.load(f'./output/base_pdfs{suffix}.npy')
 weight = np.load(f'./output/weight_pdfs{suffix}.npy')

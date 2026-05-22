@@ -19,6 +19,7 @@ print(f"Using {suffix=:}")
 tomographic_bins = np.array(config['tomographic_bins'])
 som_neurons = config['som_neurons']
 N_pdf_bins = config['N_pdf_bins']
+spline_max = config['spline_max']
 bands = config['bands']
 redshift_col = config['redshift']
 source = config['source']
@@ -71,7 +72,7 @@ def label_cell_pdfs(som, photom, zs, N_pdf_bins=N_pdf_bins):
     N_neuron = som.get_weights().shape[0]
     som_size = N_neuron * N_neuron
 
-    spline_bins = np.linspace(0, 3, N_pdf_bins)
+    spline_bins = np.linspace(0, spline_max, N_pdf_bins)
     zero_pdf = np.zeros(N_pdf_bins-1)
     flat_trained_pz_pdfs = np.zeros((som_size, N_pdf_bins-1))
     tomographic_ndxs = {}

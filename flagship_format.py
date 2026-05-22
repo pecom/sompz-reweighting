@@ -5,9 +5,22 @@ from astropy.table import Table, vstack, join
 import scipy.stats as stats
 from matplotlib.lines import Line2D
 import os, sys, gc, pickle
+import argparse
 
 flagship_zp = 48.6
 arcsec = 1./60.**2
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-p", "--onlypure", action='store_true')
+parser.add_argument("-o", "--output", type=str)
+parser.add_argument("-i", "--input", type=str,
+                    default="./data/flagship_cone2.parquet")
+
+args = parser.parse_args()
+only_pure = args.onlypure
+output_suffix = args.output
+input_fname = args.input
 
 # input_fname = './data/flagship_cone2.parquet'
 # suffix = '_blend_train'
@@ -21,9 +34,9 @@ arcsec = 1./60.**2
 # suffix = '_test'
 # only_pure = False
 
-input_fname = './data/flagship_cone2.parquet'
-suffix = '_test2'
-only_pure = False
+# input_fname = './data/flagship_cone2.parquet'
+# suffix = '_test2'
+# only_pure = False
 
 # input_fname = './data/flagship_som_train.parquet'
 # suffix = '_train'

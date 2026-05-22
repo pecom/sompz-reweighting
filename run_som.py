@@ -5,6 +5,7 @@ from minisom import MiniSom
 import astropy.units as u
 from numpy.lib.recfunctions import structured_to_unstructured
 import os, sys, gc, pickle, yaml
+import argparse
 
 
 rng = np.random.default_rng()
@@ -19,8 +20,21 @@ print(f"Using {suffix=:}")
 tomographic_bins = np.array(config['tomographic_bins'])
 som_neurons = config['som_neurons']
 N_pdf_bins = config['N_pdf_bins']
+spline_max = config['spline_max']
 bands = config['bands']
 source = config['source']
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", "--input", default="", type=str,
+                    help="Input suffix to ./data/flagship_{INPUT}")
+parser.add_argument("-o", "--output", default="", type=str,
+                    help="Output suffix to ./output/{OUTPUT}_pdf{suffix}.npy")
+parser.add_argument("-r", "--reweight", action='store_true',
+                    help="Use SOM Reweighting")
+args = parser.parse_args()
+input_suffix = args.input
+out_suffix = args.output
+reweight = args.reweight
 
 def get_photom(cat, band_str="{band}_mag", bands='grizy', verbose=False):
     if verbose:
@@ -83,16 +97,43 @@ def get_cats(ndxs, ddir=ddir, source='anacal'):
 
             full_cat = vstack(full_cats)
         case 'flagship':
-            full_cat = Table.read(f'{ddir}/data/flagship_test2.fits')
+            full_cat = Table.read(f'{ddir}/data/flagship_{input_suffix}.fits')
     return full_cat
 
-def label_cells(photom, som, tomo_cell_ndxs,
+
+def label_cells(photom, som, tomo_ndxs, flat_pdfs,
+                reweight=False, blend_weights=None, cell_weights=None):
+
+    N_neuron = som.get_weights().shape[0]
+    photom_mapped = np.array([som.winner(tp) for tp in photom])
+    photom_cell_ndxs = cell2ndx(photom_mapped[:,0], photom_mapped[:,1], N_neuron)
+
+    spline_bins = np.linspace(0, spline_max, N_pdf_bins)
+    base_pdfs = np.zeros((4, N_pdf_bins-1))
+
+    # Not the optimized way to do this but it is easier to read
+    # and easier to code :)
+    for i,pm in enumerate(photom_mapped):
+        gal_bin = tomo_ndxs[pm]
+        cndx = photom_cell_ndxs[i]
+        if reweight:
+            pure_weight = 1 - blend_weights[cndx]
+            blend_weight = blend_weights[cndx]
+            base_pdfs[gal_bin-1,:] += (pure_weight * flat_pdfs[cndx] +
+                                       blend_weight * np.dot(cell_weights[cndx,:], flat_pdfs))
+        else:
+            base_pdfs[gal_bin-1,:] += flat_pfs[cndx]
+
+    return base_pdfs
+
+
+def old_label_cells(photom, som, tomo_cell_ndxs,
                 flat_pdfs, full_cat, blend_weights, cell_weights):
     N_neuron = som.get_weights().shape[0]
     photom_mapped = np.array([som.winner(tp) for tp in photom])
     photom_cell_ndxs = cell2ndx(photom_mapped[:,0], photom_mapped[:,1], N_neuron)
 
-    spline_bins = np.linspace(0, 5, N_pdf_bins)
+    spline_bins = np.linspace(0, spline_max, N_pdf_bins)
 
     cat_counts = np.zeros(4)
     base_pdfs = np.zeros((4, N_pdf_bins-1))
@@ -145,28 +186,13 @@ def add_file(add, fname):
     tmp += add
     np.save(fname, tmp)
 
-def update_files(cat_counts, base_pdfs, weight_pdfs, true_cat_counts, true_pdfs):
-    add_file(cat_counts, f'./output/counts{suffix}.npy')
-    add_file(base_pdfs, f'./output/base_pdfs{suffix}.npy')
-    add_file(weight_pdfs, f'./output/weight_pdfs{suffix}.npy')
-    add_file(true_cat_counts, f'./output/true_counts{suffix}.npy')
-    add_file(true_pdfs, f'./output/true_pdfs{suffix}.npy')
-
-    return None
-    
-
 if __name__=="__main__":
     som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = load_model(suffix)
 
     cell_weights = np.load(f'./output/reweight/cell_weights.npy')
     blend_weights = np.load(f'./output/models/blend_weights.npy')
 
-    real_counts = np.zeros(4)
-    true_counts = np.zeros(4)
     base_pdfs = np.zeros((4, N_pdf_bins - 1))
-    weight_pdfs = np.zeros((4, N_pdf_bins - 1))
-    true_pdfs = np.zeros((4, N_pdf_bins - 1))
-
 
     load_ndxs = np.arange(10, 30)
     full_cat = get_cats(load_ndxs, source=source)
@@ -184,17 +210,7 @@ if __name__=="__main__":
 
     print("Sample photom:", photom[:3])
 
-    cat_counts, bpdfs, wpdfs, true_cat_counts, tpdfs = label_cells(photom, som, tomographic_cell_ndxs,
-                                                                                 flat_trained_pz_pdfs, full_cat,
-                                                                                 blend_weights, cell_weights)
+    bpdf = label_cells(photom, som, tomographic_ndxs, flat_trained_pz_pdfs,
+                       reweight, blend_weights, cell_weights))
 
-    real_counts += cat_counts
-    true_counts += true_cat_counts
-
-    base_pdfs += bpdfs
-    weight_pdfs += wpdfs
-    true_pdfs += tpdfs
-
-    update_files(real_counts, base_pdfs, weight_pdfs, true_counts, true_pdfs)
-
-
+    add_file(bpdf, f'./output/{out_suffix}_pdf{suffix}.npy')
