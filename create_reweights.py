@@ -63,7 +63,7 @@ def get_cats(ndxs, ddir=ddir, source='anacal'):
 
             full_cat = vstack(full_cats)
         case 'flagship':
-            full_cat = Table.read(f'{ddir}/data/flagship_test2.fits')
+            full_cat = Table.read(f'{ddir}/data/flagship_train.fits')
     return full_cat
 
 def load_model(suffix, model_dir=model_dir):

@@ -15,6 +15,14 @@ tcounts = np.load(f'./output/true_counts{suffix}.npy')
 print(counts)
 print(tcounts)
 
+true = np.load(f'./output/true_pdfs{suffix}.npy')
+base = np.load(f'./output/base_pdfs{suffix}.npy')
+weight = np.load(f'./output/weight_pdfs{suffix}.npy')
+
+print(true[1,3:6])
+print(base[1,3:6])
+print(weight[1,3:6])
+
 # np.save(f'./output/base_pdfs{suffix}.npy', zero_bin)
 # np.save(f'./output/weight_pdfs{suffix}.npy', zero_bin)
 # np.save(f'./output/true_pdfs{suffix}.npy', zero_bin)

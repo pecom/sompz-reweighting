@@ -83,7 +83,7 @@ def get_cats(ndxs, ddir=ddir, source='anacal'):
 
             full_cat = vstack(full_cats)
         case 'flagship':
-            full_cat = Table.read(f'{ddir}/data/flagship_test.fits')
+            full_cat = Table.read(f'{ddir}/data/flagship_test2.fits')
     return full_cat
 
 def label_cells(photom, som, tomo_cell_ndxs,

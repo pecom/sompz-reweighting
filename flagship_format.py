@@ -4,12 +4,30 @@ from scipy.spatial import KDTree
 from astropy.table import Table, vstack, join
 import scipy.stats as stats
 from matplotlib.lines import Line2D
+import os, sys, gc, pickle
 
-flagship_zp = -48.6
+flagship_zp = 48.6
 arcsec = 1./60.**2
 
+# input_fname = './data/flagship_cone2.parquet'
+# suffix = '_blend_train'
+# only_pure = False
+
+# input_fname = './data/flagship_cone2.parquet'
+# suffix = '_train'
+# only_pure = True
+
+# input_fname = './data/flagship_cone.parquet'
+# suffix = '_test'
+# only_pure = False
+
 input_fname = './data/flagship_cone2.parquet'
-suffix = '_train'
+suffix = '_test2'
+only_pure = False
+
+# input_fname = './data/flagship_som_train.parquet'
+# suffix = '_train'
+# only_pure = True
 
 def add_mags(cat):
     for b in list('ugrizy'):
@@ -81,6 +99,18 @@ def synth_cats(cat, match_ndxs):
 
     return synth_pure_bright, synth_blend_bright
 
+def pure_only(cat):
+    cat['zdiff'] = 0
+    cat['lower_z'] = cat['true_redshift_gal']
+    cat['blend_diff'] = 0
+
+    bright_cat = cat[cat['lsst_mag_i'] < 25]
+    som_cols = ([f'lsst_{b}' for b in 'ugrizy'] +
+            [f'lsst_mag_{b}' for b in 'ugrizy'] +
+            ['lower_z', 'zdiff', 'blend_diff'])
+
+    flag_som = bright_cat[som_cols]
+    return flag_som
 
 def som_format(pure, blend):
     som_cols = ([f'lsst_{b}' for b in 'ugrizy'] +
@@ -99,14 +129,18 @@ if __name__ == "__main__":
     cat = Table.from_pandas(test_pat)
     print("Loaded catalog")
 
+
     _ = add_mags(cat)
 
-    match_ndx = self_match(cat)
-    print("Self matched")
+    if only_pure:
+        flagship = pure_only(cat)
+    else:
+        match_ndx = self_match(cat)
+        print("Self matched")
 
-    pure, blend = synth_cats(cat, match_ndx)
-    print("Generated synthetic catalogs")
-    flagship = som_format(pure, blend)
+        pure, blend = synth_cats(cat, match_ndx)
+        print("Generated synthetic catalogs")
+        flagship = som_format(pure, blend)
 
     flagship.write(f'./data/flagship{suffix}.fits', format='fits', overwrite=True)
 

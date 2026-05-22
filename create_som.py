@@ -60,6 +60,7 @@ def create_som(photom, N, N_train=1000, sigma=np.pi, learning_rate=0.5):
     som_size = N_neuron * N_neuron
     Nfeats = photom.shape[1]
     som = MiniSom(N_neuron, N_neuron, Nfeats, sigma=sigma, learning_rate=learning_rate)
+    # som.train_batch_offline_fast(photom, N_train, verbose=True)
     som.train(photom, N_train, random_order=True, verbose=True)
     
     return som
@@ -70,7 +71,7 @@ def label_cell_pdfs(som, photom, zs, N_pdf_bins=N_pdf_bins):
     N_neuron = som.get_weights().shape[0]
     som_size = N_neuron * N_neuron
 
-    spline_bins = np.linspace(0, 5, N_pdf_bins)
+    spline_bins = np.linspace(0, 3, N_pdf_bins)
     zero_pdf = np.zeros(N_pdf_bins-1)
     flat_trained_pz_pdfs = np.zeros((som_size, N_pdf_bins-1))
     tomographic_ndxs = {}
@@ -109,8 +110,6 @@ def label_cell_pdfs(som, photom, zs, N_pdf_bins=N_pdf_bins):
 def store_all(som, tomographic_cell_ndxs, tomographic_ndxs,
              flat_trained_pz_pdfs, blend_info, suffix=suffix, out_dir=out_dir):
 
-    blend_numer, blend_denom, som_blend_frac = blend_info
-
     with open(f'{out_dir}/som{suffix}.pkl', 'wb') as out:
         pickle.dump(som, out)
 
@@ -122,9 +121,9 @@ def store_all(som, tomographic_cell_ndxs, tomographic_ndxs,
     with open(f'{out_dir}/cell_tomo_bins{suffix}.pkl', 'wb') as out:
         pickle.dump(tomographic_ndxs, out)
 
-    np.save(f'{out_dir}/blend_numer{suffix}.npy', blend_numer)
-    np.save(f'{out_dir}/blend_denom{suffix}.npy', blend_denom)
-    np.save(f'{out_dir}/blend_weights{suffix}.npy', som_blend_frac)
+    # np.save(f'{out_dir}/blend_numer{suffix}.npy', blend_numer)
+    # np.save(f'{out_dir}/blend_denom{suffix}.npy', blend_denom)
+    # np.save(f'{out_dir}/blend_weights{suffix}.npy', som_blend_frac)
 
     return 0
 
@@ -138,32 +137,8 @@ def get_cats(ndxs, ddir=ddir, source='anacal'):
 
             full_cat = vstack(full_cats)
         case 'flagship':
-            full_cat = Table.read(f'{ddir}/data/flagship_test2.fits')
+            full_cat = Table.read(f'{ddir}/data/flagship_train.fits')
     return full_cat
-
-def blend_som(som, full_cat, band_format):
-    N_neuron = som.get_weights().shape[0]
-    som_size = N_neuron * N_neuron
-    
-    blend_numer = np.zeros(som_size)
-
-    full_photom, _, nan_filt = get_mlcat(full_cat, bands=bands,
-                                         redshift_col=redshift_col, verbose=False,
-                                         band_str=band_format)
-
-    full_map = np.array([som.winner(fp) for fp in full_photom])
-    full_map_ndxs = cell2ndx(full_map[:,0], full_map[:,1], N_neuron)
-    
-    blend_filt = full_cat[nan_filt]['blend_diff'] > 0
-
-    blend_denom = np.bincount(full_map_ndxs, minlength=som_size)
-    for i in range(som_size):
-        blend_numer[i] = np.sum(full_map_ndxs[blend_filt] == i)
-    
-    som_blend_frac = np.zeros(som_size)
-    som_blend_frac[blend_denom > 0] = blend_numer[blend_denom > 0]/blend_denom[blend_denom > 0]
-
-    return blend_numer, blend_denom, som_blend_frac
 
 
 if __name__=="__main__":
@@ -190,12 +165,13 @@ if __name__=="__main__":
                                      band_str=mag_format)
     
     print("Sample photom:", photom[:3])
-    som = create_som(photom, som_neurons, 5000)
+    som = create_som(photom, som_neurons, 100000)
     print("Created SOM.")
     tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = label_cell_pdfs(som, photom, redshifts, N_pdf_bins)
     print("Assigned PZ PDFs.")
 
-    blend_numer, blend_denom, som_blend_frac = blend_som(som, full_cat, mag_format)
-    print("Created SOM blend ratio.")
+    # blend_numer, blend_denom, som_blend_frac = blend_som(som, full_cat, mag_format)
+    # print("Created SOM blend ratio.")
 
-    store_all(som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs, [blend_numer, blend_denom, som_blend_frac])
+    # store_all(som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs, [blend_numer, blend_denom, som_blend_frac])
+    store_all(som, tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs, [1,2,3])
