@@ -63,7 +63,7 @@ def get_cats(ndxs, ddir=ddir, source='anacal'):
 
             full_cat = vstack(full_cats)
         case 'flagship':
-            full_cat = Table.read(f'{ddir}/data/flagship_train.fits')
+            full_cat = Table.read(f'{ddir}/data/flagship_pure_train.fits')
     return full_cat
 
 def load_model(suffix, model_dir=model_dir):
@@ -144,11 +144,15 @@ def create_matrix(blends, input1, input2, som):
 
     cell_weights = np.zeros((som_size, som_size))
     # cell_weights[k,i] = (2 * Number of Times cell i mapped to k)/(2 * Number of mappings to k)
+    n_unsampled_cells = 0
     for i in range(som_size):
         if blend_normalization[i] == 0:
             cell_weights[i,i] = 1
+            n_unsampled_cells += 1
         else:
             cell_weights[i,:] = np.sum(blend_counts_matrix[:,:,i], axis=0)/blend_normalization[i]
+
+    print(f"There are {n_unsampled_cells} cells with 0 blends out of {som_size} cells.")
 
     return blend_counts_matrix, cell_weights
 

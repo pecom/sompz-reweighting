@@ -1,6 +1,7 @@
 suffix: 'flagship'
 
 N_pdf_bins: 101
+spline_max: 3
 
 som_neurons: 32
 

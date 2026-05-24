@@ -5,7 +5,13 @@ from minisom import MiniSom
 import astropy.units as u
 from numpy.lib.recfunctions import structured_to_unstructured
 import os, sys, gc, pickle, yaml
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument("-s", "--sub_sample", action='store_true')
+
+args = parser.parse_args()
+sub_sample = args.sub_sample
 
 rng = np.random.default_rng()
 ddir = '/gpfs/projects/VonDerLindenGroup/padari/som-pz'
@@ -62,7 +68,9 @@ def create_som(photom, N, N_train=1000, sigma=np.pi, learning_rate=0.5):
     Nfeats = photom.shape[1]
     som = MiniSom(N_neuron, N_neuron, Nfeats, sigma=sigma, learning_rate=learning_rate)
     # som.train_batch_offline_fast(photom, N_train, verbose=True)
-    som.train(photom, N_train, random_order=True, verbose=True)
+    som.train(photom, N_train, random_order=True, verbose=False)
+    random_set = rng.choice(photom, size=100000, replace=False)
+    print('\n quantization error:', som.quantization_error(random_set))
     
     return som
 
@@ -104,9 +112,10 @@ def label_cell_pdfs(som, photom, zs, N_pdf_bins=N_pdf_bins):
                 continue
             cell_ndx = cell2ndx(i,j, N_neuron)
             tomographic_cell_ndxs[ndx].append(cell_ndx)
+
+    print(tomographic_cell_ndxs[1])
     
     return tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs
-
 
 def store_all(som, tomographic_cell_ndxs, tomographic_ndxs,
              flat_trained_pz_pdfs, blend_info, suffix=suffix, out_dir=out_dir):
@@ -138,7 +147,7 @@ def get_cats(ndxs, ddir=ddir, source='anacal'):
 
             full_cat = vstack(full_cats)
         case 'flagship':
-            full_cat = Table.read(f'{ddir}/data/flagship_train.fits')
+            full_cat = Table.read(f'{ddir}/data/flagship_pure_train.fits')
     return full_cat
 
 
@@ -161,14 +170,29 @@ if __name__=="__main__":
     blend_frac = np.sum(~pure_filt)/len(pure_filt)
     print(f"Blend fraction: {blend_frac:0.3f}")
 
-    photom, redshifts, _ = get_mlcat(full_cat[pure_filt], bands=bands,
+    photom, zs, _ = get_mlcat(full_cat[pure_filt], bands=bands,
                                      redshift_col=redshift_col, verbose=True, 
                                      band_str=mag_format)
+
+    if sub_sample:
+        print("Taking equi-counts tomographic subsample")
+        ndxs0 = rng.choice(np.where((zs > tomographic_bins[0]) & (zs < tomographic_bins[1]))[0], size=50000)
+        ndxs1 = rng.choice(np.where((zs > tomographic_bins[1]) & (zs < tomographic_bins[2]))[0], size=50000)
+        ndxs2 = rng.choice(np.where((zs > tomographic_bins[2]) & (zs < tomographic_bins[3]))[0], size=50000)
+        ndxs3 = rng.choice(np.where((zs > tomographic_bins[3]) & (zs < tomographic_bins[4]))[0], size=50000)
+        ndxs4 = rng.choice(len(photom), size=25000, replace=False)
+        # print(f"{ndxs0=:}, {ndxs1=:}, {ndxs2=:}, {ndxs3=:}, {ndxs4=:}")
+
+        full_ndxs = np.concat((ndxs0, ndxs1, ndxs2, ndxs3, ndxs4))
+        # full_ndxs = np.concat((ndxs0, ndxs4))
+
+        photom = photom[full_ndxs]
+        zs = zs[full_ndxs]
     
     print("Sample photom:", photom[:3])
     som = create_som(photom, som_neurons, 100000)
     print("Created SOM.")
-    tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = label_cell_pdfs(som, photom, redshifts, N_pdf_bins)
+    tomographic_cell_ndxs, tomographic_ndxs, flat_trained_pz_pdfs = label_cell_pdfs(som, photom, zs, N_pdf_bins)
     print("Assigned PZ PDFs.")
 
     # blend_numer, blend_denom, som_blend_frac = blend_som(som, full_cat, mag_format)

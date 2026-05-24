@@ -19,7 +19,7 @@ parser.add_argument("-i", "--input", type=str,
 
 args = parser.parse_args()
 only_pure = args.onlypure
-output_suffix = args.output
+suffix = args.output
 input_fname = args.input
 
 # input_fname = './data/flagship_cone2.parquet'
@@ -54,7 +54,7 @@ def self_match(cat):
     euclid_coords = np.vstack((cat['ra_gal'], cat['dec_gal'])).T
     euclid_tree = KDTree(euclid_coords)
 
-    match_ndxs = euclid_tree.query_ball_point(euclid_coords, 0.75*arcsec)
+    match_ndxs = euclid_tree.query_ball_point(euclid_coords, 1.85*arcsec)
     return match_ndxs
 
 def synth_cats(cat, match_ndxs):
@@ -65,7 +65,7 @@ def synth_cats(cat, match_ndxs):
         if len(mndx)==1:
             synth_pure_ndxs.append(mndx[0])
         else:
-            if mndx[0] >= i:
+            if mndx[1] >= mndx[0]:
                 m_rows = cat[mndx]
                 flux_weight = m_rows['lsst_i']
                 weight_sum = np.sum(flux_weight)
@@ -106,9 +106,8 @@ def synth_cats(cat, match_ndxs):
 
     _ = add_mags(synth_blend)
         
-    synth_pure_bright = synth_pure[synth_pure['lsst_mag_i'] < 25]
+    synth_pure_bright = synth_pure[synth_pure['lsst_mag_i'] < 27]
     synth_blend_bright =synth_blend[synth_blend['lsst_mag_i'] < 25]
-
 
     return synth_pure_bright, synth_blend_bright
 
@@ -117,7 +116,7 @@ def pure_only(cat):
     cat['lower_z'] = cat['true_redshift_gal']
     cat['blend_diff'] = 0
 
-    bright_cat = cat[cat['lsst_mag_i'] < 25]
+    bright_cat = cat[cat['lsst_mag_i'] < 27]
     som_cols = ([f'lsst_{b}' for b in 'ugrizy'] +
             [f'lsst_mag_{b}' for b in 'ugrizy'] +
             ['lower_z', 'zdiff', 'blend_diff'])
@@ -144,6 +143,7 @@ if __name__ == "__main__":
 
 
     _ = add_mags(cat)
+    cat = cat[cat['lsst_mag_i'] < 27]
 
     if only_pure:
         flagship = pure_only(cat)

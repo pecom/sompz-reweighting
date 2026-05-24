@@ -109,21 +109,26 @@ def label_cells(photom, som, tomo_ndxs, flat_pdfs,
     photom_cell_ndxs = cell2ndx(photom_mapped[:,0], photom_mapped[:,1], N_neuron)
 
     spline_bins = np.linspace(0, spline_max, N_pdf_bins)
-    base_pdfs = np.zeros((4, N_pdf_bins-1))
+    base_pdfs = np.zeros((5, N_pdf_bins-1))
+    debug_counts = np.zeros(5)
 
     # Not the optimized way to do this but it is easier to read
     # and easier to code :)
     for i,pm in enumerate(photom_mapped):
-        gal_bin = tomo_ndxs[pm]
+        gal_bin = tomo_ndxs[(pm[0], pm[1])]
+        if gal_bin >= 6:
+            continue
         cndx = photom_cell_ndxs[i]
+        debug_counts[gal_bin-1] += 1
         if reweight:
             pure_weight = 1 - blend_weights[cndx]
             blend_weight = blend_weights[cndx]
             base_pdfs[gal_bin-1,:] += (pure_weight * flat_pdfs[cndx] +
                                        blend_weight * np.dot(cell_weights[cndx,:], flat_pdfs))
         else:
-            base_pdfs[gal_bin-1,:] += flat_pfs[cndx]
+            base_pdfs[gal_bin-1,:] += flat_pdfs[cndx]
 
+    print(debug_counts)
     return base_pdfs
 
 
@@ -165,6 +170,7 @@ def old_label_cells(photom, som, tomo_cell_ndxs,
         for cndx in cut_photom_cell_ndxs:
             pure_weight = 1 - blend_weights[cndx]
             blend_weight = blend_weights[cndx]
+
             weight_pdfs[i-1,:] += (pure_weight * flat_pdfs[cndx] +
                                    blend_weight * np.dot(cell_weights[cndx,:], flat_pdfs))
         
@@ -197,6 +203,8 @@ if __name__=="__main__":
     load_ndxs = np.arange(10, 30)
     full_cat = get_cats(load_ndxs, source=source)
 
+    print(f"Catalog loaded with {np.sum(full_cat['blend_diff'] >= 1)/len(full_cat):0.3f} blends")
+
     match source:
         case 'anacal':
             flux_format='{band}_flux_gauss2'
@@ -208,9 +216,9 @@ if __name__=="__main__":
     photom = get_photom(full_cat, verbose=False, bands=bands,
                         band_str=mag_format)
 
-    print("Sample photom:", photom[:3])
+    print("Sample photom:", photom[-3:])
 
     bpdf = label_cells(photom, som, tomographic_ndxs, flat_trained_pz_pdfs,
-                       reweight, blend_weights, cell_weights))
+                       reweight, blend_weights, cell_weights)
 
-    add_file(bpdf, f'./output/{out_suffix}_pdf{suffix}.npy')
+    add_file(bpdf, f'./output/{out_suffix}_pdfs{suffix}.npy')
